@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Health Monitor</title>
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --card: #ffffff;
+            --text: #172033;
+            --muted: #697386;
+            --border: #e4e9f1;
+            --primary: #4f46e5;
+            --green: #15803d;
+            --red: #b91c1c;
+            --amber: #b45309;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .topbar {
+            background: #111827;
+            color: white;
+            padding: 24px 20px;
+        }
+        .topbar-inner, main {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+        }
+        .topbar h1 { margin: 0 0 8px; font-size: 25px; }
+        .topbar p { margin: 0; color: #cbd5e1; }
+        main { padding: 26px 20px 40px; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 19px;
+            box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+        }
+        .metric-label { color: var(--muted); font-size: 13px; }
+        .metric-value { font-size: 30px; font-weight: 700; margin-top: 10px; }
+        .section-title { margin: 0 0 16px; font-size: 18px; }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 9px;
+            font: inherit;
+            resize: vertical;
+        }
+        textarea:focus { outline: 2px solid #c7d2fe; border-color: var(--primary); }
+        .hint { color: var(--muted); font-size: 13px; margin: 8px 0 14px; }
+        .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        button, .button {
+            display: inline-block;
+            border: 0;
+            border-radius: 9px;
+            padding: 11px 15px;
+            font: inherit;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .primary { background: var(--primary); color: white; }
+        .secondary { background: #eef2ff; color: #3730a3; }
+        .danger { background: #fff1f2; color: #9f1239; }
+        .flash {
+            padding: 12px 14px;
+            border-radius: 9px;
+            margin-bottom: 14px;
+            font-size: 14px;
+        }
+        .flash.success { background: #dcfce7; color: #166534; }
+        .flash.error { background: #fee2e2; color: #991b1b; }
+        .table-wrap { overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; min-width: 760px; }
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        th { color: var(--muted); font-weight: 600; background: #f8fafc; }
+        td.url { max-width: 260px; overflow-wrap: anywhere; }
+        .pill {
+            display: inline-block;
+            padding: 5px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .online { background: #dcfce7; color: var(--green); }
+        .http-error { background: #fef3c7; color: var(--amber); }
+        .unavailable { background: #fee2e2; color: var(--red); }
+        .empty { color: var(--muted); text-align: center; padding: 28px; }
+        .section-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .section-head .section-title { margin: 0; }
+        @media (max-width: 720px) {
+            .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .topbar h1 { font-size: 21px; }
+            main { padding: 18px 12px 30px; }
+            .metric-value { font-size: 25px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <h1>Website Health Monitor</h1>
+            <p>Check website availability, response time, and saved reports.</p>
+        </div>
+    </header>
+
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <section class="grid" aria-label="Monitoring summary">
+            <div class="card">
+                <div class="metric-label">Total Checks</div>
+                <div class="metric-value">{{ summary.total }}</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Online</div>
+                <div class="metric-value" style="color: var(--green)">{{ summary.online }}</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">HTTP Errors</div>
+                <div class="metric-value" style="color: var(--amber)">{{ summary.http_errors }}</div>
+            </div>
+            <div class="card">
+                <div class="metric-label">Unavailable</div>
+                <div class="metric-value" style="color: var(--red)">{{ summary.unavailable }}</div>
+            </div>
+        </section>
+
+        <section class="card" style="margin-bottom: 20px">
+            <h2 class="section-title">Check Website(s)</h2>
+            <form action="{{ url_for('check') }}" method="post">
+                <label for="urls"><strong>Website URL(s)</strong></label>
+                <textarea id="urls" name="urls" placeholder="https://example.com&#10;https://www.python.org" required></textarea>
+                <p class="hint">Enter one URL per line, or separate multiple URLs with commas. Up to 20 at a time.</p>
+                <div class="actions">
+                    <button class="primary" type="submit">Check Website</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="section-head">
+                <h2 class="section-title">Report History</h2>
+                <div class="actions">
+                    <a class="button secondary" href="{{ url_for('download_report') }}">Download CSV</a>
+                    <form action="{{ url_for('clear_report') }}" method="post"
+                          onsubmit="return confirm('Delete all saved report history?');">
+                        <button class="danger" type="submit">Clear History</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Website</th>
+                            <th>Status</th>
+                            <th>HTTP Code</th>
+                            <th>Response Time</th>
+                            <th>Performance</th>
+                            <th>Checked At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for item in records %}
+                        <tr>
+                            <td class="url">{{ item["URL"] }}</td>
+                            <td>
+                                {% if item["Status"] == "ONLINE" %}
+                                    <span class="pill online">ONLINE</span>
+                                {% elif item["Status"] == "HTTP ERROR" %}
+                                    <span class="pill http-error">HTTP ERROR</span>
+                                {% else %}
+                                    <span class="pill unavailable">UNAVAILABLE</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item["HTTP Code"] }}</td>
+                            <td>{{ item["Response Time (ms)"] }} ms</td>
+                            <td>{{ item["Performance"] }}</td>
+                            <td>{{ item["Checked At"] }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="6" class="empty">No reports yet. Enter a website URL above to begin.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="hint">The dashboard shows the latest 50 checks. The CSV download contains the full saved history.</p>
+        </section>
+    </main>
+</body>
+</html>
